@@ -10,7 +10,7 @@ typedef struct Account {
     struct Account *next;
 } Account;
 
-bool create(Account **head, const char *username, const char *password, const char *email, const char *phone, const char *status, const char *role);
+bool create(Account **head, const char *username, const char *password, const char *email, const char *phone, const char *status, const char *role, bool silent);
 void update(Account *head, const char *username, const char *newEmail, const char *newPhone);
 void read(Account *head);
 void deleteAcc(Account **head, const char *username);

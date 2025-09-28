@@ -29,6 +29,11 @@ void showMenu(){
     printf("5. Reset password \n");
     printf("6. View login history \n");
     printf("7. Sign out \n");
+    if(currentUser && strcmp(currentUser->role, "admin") == 0){
+        printf("8. View all accounts (Admin) \n");
+        printf("9. Delete account (Admin) \n");
+        printf("10. Reset user password (Admin) \n");
+    }
     printf("Your choice (1-7, other to quit): ");
 }
 
@@ -42,7 +47,7 @@ void registerAccount(){
     scanf("%s", email);
     printf("Enter phone: ");
     scanf("%s", phone);
-    if( create(&accountList, username, password, email, phone, "active", "user") ) 
+    if( create(&accountList, username, password, email, phone, "active", "user", false) ) 
         saveAccountsToFile(accountList);
 }
 
@@ -161,14 +166,68 @@ void viewLoginHistory(){
     readHistory(historyList, currentUser->username);
 }
 
+void viewAllAccounts(){
+    if(!currentUser || strcmp(currentUser->role, "admin") != 0){
+        printf("Access denied. Admin only.\n");
+        return;
+    }
+    printf("All accounts:\n");
+    read(accountList);
+}
+
+void deleteAccount() {
+    if (!currentUser || strcmp(currentUser->role, "admin") != 0) {
+        printf("Access denied. Admin only.\n");
+        return;
+    }
+
+    char username[50];
+    printf("Enter username to delete: ");
+    scanf("%49s", username);
+
+    if (strcmp(username, currentUser->username) == 0) {
+        printf("Cannot delete your own account.\n");
+        return;
+    }
+
+    Account *toDelete = findAccount(accountList, username);
+    if (!toDelete) {
+        printf("Account not found.\n");
+        return;
+    }
+
+    deleteAcc(&accountList, username);
+    saveAccountsToFile(accountList);
+}
+
+void adminResetPassword(){
+    if(!currentUser || strcmp(currentUser->role, "admin") != 0){
+        printf("Access denied. Admin only.\n");
+        return;
+    }
+    char username[50], newPassword[50];
+    printf("Enter username to reset password: ");
+    scanf("%s", username);
+    Account *acc = findAccount(accountList, username);
+    if(!acc){
+        printf("Account not found.\n");
+        return;
+    }
+    printf("Enter new password for %s: ", username);
+    scanf("%s", newPassword);
+    strcpy(acc->password, newPassword);
+    saveAccountsToFile(accountList);
+    printf("Password reset successfully for %s.\n", username);
+}
+
 void init(){
     loadAccountsFromFile(&accountList);
     loadHistoryFromFile(&historyList);
 }
-int main(){
-    init();
+int main(){ 
     while (1)
     {
+        init();
         showMenu();
         int choice;
         scanf("%d", &choice);
@@ -194,6 +253,15 @@ int main(){
             break;
         case 7:
             signOut();
+            break;
+        case 8:
+            viewAllAccounts();
+            break;
+        case 9:
+            deleteAccount();
+            break;
+        case 10:
+            adminResetPassword();
             break;
         default:
             printf("Exiting program.\n");

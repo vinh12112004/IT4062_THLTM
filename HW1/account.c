@@ -3,9 +3,9 @@
 #include "string.h"
 #include "stdbool.h"
 
-bool create(Account **head, const char *username, const char *password, const char *email, const char *phone, const char *status, const char *role) {
+bool create(Account **head, const char *username, const char *password, const char *email, const char *phone, const char *status, const char *role, bool silent) {
     if (findAccount(*head, username)) {
-        printf("Username already exists\n");
+        if (!silent) printf("Username already exists\n");
         return false;
     }
     Account *newAccount = (Account *)malloc(sizeof(Account));
@@ -47,23 +47,28 @@ void read(Account *head) {
 }
 
 void deleteAcc(Account **head, const char *username) {
-    Account *current = *head;
-    Account *prev = NULL;
-    while (current) {
-        if (strcmp(current->username, username) == 0) {
-            if (prev) {
-                prev->next = current->next;
-            } else {
-                *head = current->next;
-            }
-            free(current);
-            printf("Account deleted successfully.\n");
-            return;
-        }
-        prev = current;
-        current = current->next;
+    if (!head || !*head) return;
+
+    Account *toDelete = findAccount(*head, username);
+    if (!toDelete) {
+        printf("Account not found.\n");
+        return;
     }
-    printf("Account not found.\n");
+
+    // Nếu node cần xóa là head
+    if (toDelete == *head) {
+        *head = (*head)->next;
+    } else {
+        // Tìm node trước của node cần xóa
+        Account *prev = *head;
+        while (prev->next != toDelete) {
+            prev = prev->next;
+        }
+        prev->next = toDelete->next;
+    }
+
+    free(toDelete);
+    printf("Account deleted successfully.\n");
 }
 
 void saveAccountsToFile(Account *head) {
@@ -85,7 +90,7 @@ void loadAccountsFromFile(Account **head) {
     if (!f) return;
     char username[50], password[50], email[100], phone[20], status[10], role[10];
     while (fscanf(f, "%s %s %s %s %s %s", username, password, email, phone, status, role) == 6) {
-        create(head, username, password, email, phone, status, role);
+        create(head, username, password, email, phone, status, role, true);
     }
     fclose(f);
 }
