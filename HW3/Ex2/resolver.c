@@ -1,3 +1,7 @@
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,22 +15,76 @@
 #define MAX_INPUT 1024
 #define LOG_FILE "resolver_log.txt"
 
+// Hàm thay thế inet_pton cho IPv4 (tương thích MinGW cũ)
+int my_inet_pton_v4(const char *src, void *dst) {
+    struct sockaddr_in sa;
+    int len = sizeof(sa);
+    
+    if (WSAStringToAddressA((char*)src, AF_INET, NULL, (struct sockaddr*)&sa, &len) == 0) {
+        memcpy(dst, &sa.sin_addr, sizeof(struct in_addr));
+        return 1;
+    }
+    return 0;
+}
+
+// Hàm thay thế inet_pton cho IPv6
+int my_inet_pton_v6(const char *src, void *dst) {
+    struct sockaddr_in6 sa;
+    int len = sizeof(sa);
+    
+    if (WSAStringToAddressA((char*)src, AF_INET6, NULL, (struct sockaddr*)&sa, &len) == 0) {
+        memcpy(dst, &sa.sin6_addr, sizeof(struct in6_addr));
+        return 1;
+    }
+    return 0;
+}
+
+// Hàm thay thế inet_ntop cho IPv4
+const char* my_inet_ntop_v4(const void *src, char *dst, size_t size) {
+    struct sockaddr_in sa;
+    DWORD len = size;
+    
+    memset(&sa, 0, sizeof(sa));
+    sa.sin_family = AF_INET;
+    memcpy(&sa.sin_addr, src, sizeof(struct in_addr));
+    
+    if (WSAAddressToStringA((struct sockaddr*)&sa, sizeof(sa), NULL, dst, &len) == 0) {
+        return dst;
+    }
+    return NULL;
+}
+
+// Hàm thay thế inet_ntop cho IPv6
+const char* my_inet_ntop_v6(const void *src, char *dst, size_t size) {
+    struct sockaddr_in6 sa;
+    DWORD len = size;
+    
+    memset(&sa, 0, sizeof(sa));
+    sa.sin6_family = AF_INET6;
+    memcpy(&sa.sin6_addr, src, sizeof(struct in6_addr));
+    
+    if (WSAAddressToStringA((struct sockaddr*)&sa, sizeof(sa), NULL, dst, &len) == 0) {
+        return dst;
+    }
+    return NULL;
+}
+
 // Kiểm tra địa chỉ IPv4 hợp lệ
 int is_valid_ipv4(const char *ip) {
     struct in_addr addr;
-    return inet_pton(AF_INET, ip, &addr) == 1;
+    return my_inet_pton_v4(ip, &addr) == 1;
 }
 
 // Kiểm tra địa chỉ IPv6 hợp lệ
 int is_valid_ipv6(const char *ip) {
     struct in6_addr addr;
-    return inet_pton(AF_INET6, ip, &addr) == 1;
+    return my_inet_pton_v6(ip, &addr) == 1;
 }
 
 // Kiểm tra địa chỉ IP đặc biệt (loopback, private)
 int is_special_ipv4(const char *ip) {
     struct in_addr addr;
-    if (inet_pton(AF_INET, ip, &addr) != 1) return 0;
+    if (my_inet_pton_v4(ip, &addr) != 1) return 0;
     
     unsigned char *bytes = (unsigned char*)&addr.s_addr;
     
@@ -50,7 +108,7 @@ int is_special_ipv4(const char *ip) {
 
 int is_special_ipv6(const char *ip) {
     struct in6_addr addr;
-    if (inet_pton(AF_INET6, ip, &addr) != 1) return 0;
+    if (my_inet_pton_v6(ip, &addr) != 1) return 0;
     
     // Loopback: ::1
     int is_loopback = 1;
@@ -77,7 +135,7 @@ void write_log(const char *query, const char *result) {
     if (f) {
         time_t now = time(NULL);
         char *timestamp = ctime(&now);
-        timestamp[strlen(timestamp) - 1] = '\0'; // Xóa ký tự newline
+        timestamp[strlen(timestamp) - 1] = '\0';
         fprintf(f, "[%s] Query: %s\n%s\n\n", timestamp, query, result);
         fclose(f);
     }
@@ -146,7 +204,7 @@ void resolve_domain(const char *domain, char *log_buffer) {
     
     struct addrinfo hints, *res, *p;
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC; // Hỗ trợ cả IPv4 và IPv6
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_CANONNAME;
     
@@ -178,14 +236,14 @@ void resolve_domain(const char *domain, char *log_buffer) {
             if (p->ai_family == AF_INET) {
                 struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
                 addr = &(ipv4->sin_addr);
-                inet_ntop(AF_INET, addr, ipstr, sizeof(ipstr));
+                my_inet_ntop_v4(addr, ipstr, sizeof(ipstr));
                 if (ipv4_count < 10) {
                     strcpy(ipv4_list[ipv4_count++], ipstr);
                 }
             } else if (p->ai_family == AF_INET6) {
                 struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)p->ai_addr;
                 addr = &(ipv6->sin6_addr);
-                inet_ntop(AF_INET6, addr, ipstr, sizeof(ipstr));
+                my_inet_ntop_v6(addr, ipstr, sizeof(ipstr));
                 if (ipv6_count < 10) {
                     strcpy(ipv6_list[ipv6_count++], ipstr);
                 }
@@ -274,7 +332,6 @@ void process_query(const char *input) {
 void process_multiple_queries(char *line) {
     char *token = strtok(line, " \t,;");
     while (token != NULL) {
-        // Bỏ qua token rỗng
         if (strlen(token) > 0) {
             process_query(token);
         }
@@ -294,10 +351,8 @@ void batch_mode(const char *filename) {
     printf("=== Batch mode: reading from %s ===\n", filename);
     
     while (fgets(line, sizeof(line), f)) {
-        // Xóa ký tự newline
         line[strcspn(line, "\r\n")] = 0;
         
-        // Bỏ qua dòng rỗng và comment
         if (strlen(line) == 0 || line[0] == '#') continue;
         
         process_multiple_queries(line);
@@ -320,10 +375,8 @@ void interactive_mode() {
         printf("Query> ");
         if (!fgets(input, sizeof(input), stdin)) break;
         
-        // Xóa ký tự newline
         input[strcspn(input, "\r\n")] = 0;
         
-        // Nếu chuỗi rỗng thì thoát
         if (strlen(input) == 0) {
             printf("Goodbye!\n");
             break;
@@ -334,14 +387,12 @@ void interactive_mode() {
 }
 
 int main(int argc, char *argv[]) {
-    // Khởi tạo Winsock
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         printf("WSAStartup failed\n");
         return 1;
     }
     
-    // Kiểm tra chế độ batch
     if (argc == 2) {
         batch_mode(argv[1]);
     } else {
