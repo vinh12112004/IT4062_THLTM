@@ -1,0 +1,5 @@
+vinh 123456 vinh@gmail.com http://vinh.com 1
+tuan abc123 tuan@gmail.com http://tuan.com 0
+mai qwerty mai@yahoo.com http://mai.com 1
+an 9999 an@hotmail.com http://an.net 1
+linh test123 linh@gmail.com http://linh.com 0
